@@ -378,6 +378,7 @@ body.talking .bot3d:not(.pz) .armR .fore{animation:b3exL 3.4s ease-in-out 1.7s i
 .icon-btn.wake.on{color:#4f46e5}.icon-btn.wake.on .wd{background:#22c55e;animation:wkp 1.6s infinite}
 .icon-btn.wake.busy .wd{background:#f59e0b;animation:wkp .6s infinite}
 @keyframes wkp{50%{box-shadow:0 0 0 6px rgba(34,197,94,0)}0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}}
+.whint{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;border:1px solid var(--line);background:#fff;color:#4f46e5;font:700 13px 'Inter',sans-serif;box-shadow:var(--sh);cursor:pointer;white-space:nowrap}
 
 </style></head><body>
 <div id="app">
@@ -1122,58 +1123,74 @@ function poseFor(ans,q){const a=(ans||'').slice(0,400).toLowerCase(),u=(q||'').t
  if(/step|first|here is|let us|let's|because|means|is called|defined/.test(a))return 'present';
  return ['nod','present','point','proud'][Math.floor(Math.random()*4)]}
 
-/* ---------- hands-free wake word: "OntechBot" ---------- */
+/* ---------- hands-free wake word: "OntechBot" / "Hey Buddy" / "Buddy" ---------- */
 (function(){
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-const WAKE=/\b(on|un|own)\s?(tech|tek|tec|take|tack)\s?(bot|but|boat|bought|bot's)\b/i;
-let wr=null,on=false,paused=false,busyCmd=false,lastHit=0,wakeTimer=0,gotPerm=false;
+/* matches OntechBot and the usual mis-hearings, plus buddy */
+const WAKE=/\b(?:(?:hey|hi|hello|ok|okay)\s+)?(?:buddy|buddie|bodie|budy|(?:on|un|own|an|in|and)\s?(?:tech|tek|tec|take|tack|teck)\s?(?:bot|but|boat|bought|board|bots|bod)?)\b/i;
+let wr=null,on=false,paused=false,busyCmd=false,lastHit=0,hitTimer=0,pendTail='',lastStart=0,AC=null;
 const KEY2='ontech_wake';
 const stored=()=>{try{return localStorage.getItem(KEY2)}catch(e){return null}};
 const store=v=>{try{localStorage.setItem(KEY2,v?'1':'0')}catch(e){}};
-function norm(s){return(s||'').toLowerCase().replace(/[^a-z' ]+/g,' ').replace(/\s+/g,' ').trim()}
-function paint(){const b=document.getElementById('wbtn');if(!b)return;b.classList.toggle('on',on&&!paused&&!busyCmd);b.classList.toggle('busy',busyCmd);
- b.title=on?'Listening for "OntechBot" - tap to turn off':'Tap to let me listen for "OntechBot"';b.setAttribute('aria-pressed',on?'true':'false')}
-function stopWake(){try{wr&&(wr.onend=null,wr.onresult=null,wr.onerror=null,wr.abort())}catch(e){}wr=null}
+const norm=s=>(s||'').toLowerCase().replace(/[^a-z0-9' +\-=×÷\/.%^]+/g,' ').replace(/\s+/g,' ').trim();
+function beep(f){try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();const o=AC.createOscillator(),g=AC.createGain();o.frequency.value=f||880;o.type='sine';g.gain.value=.08;o.connect(g);g.connect(AC.destination);o.start();g.gain.exponentialRampToValueAtTime(.0001,AC.currentTime+.18);o.stop(AC.currentTime+.2)}catch(e){}}
+function paint(){const b=document.getElementById('wbtn');if(b){const live=on&&!paused&&!busyCmd&&!!wr;b.classList.toggle('on',live);b.classList.toggle('busy',busyCmd);
+ b.title=on?'Listening for "OntechBot" or "Buddy" - tap to turn off':'Tap to let me listen for "OntechBot" or "Buddy"';b.setAttribute('aria-pressed',on?'true':'false')}
+ const h=document.getElementById('whint');if(h)h.style.display=(on&&wr)||!SR?'none':'flex'}
+function stopWake(){const r=wr;wr=null;if(!r)return;r.onend=null;r.onresult=null;r.onerror=null;try{r.abort()}catch(e){}}
 function startWake(){if(!SR||!on||paused||busyCmd||wr)return;
- const r=new SR();wr=r;r.continuous=true;r.interimResults=true;r.lang={en:'en-ZA',zu:'en-ZA',sn:'en-ZA'}[S.lang]||'en-US';
- r.onresult=e=>{if(paused||busyCmd)return;let txt='',fin=false;for(let i=e.resultIndex;i<e.results.length;i++){txt+=e.results[i][0].transcript+' ';if(e.results[i].isFinal)fin=true}
-  const n=norm(txt),m=n.match(WAKE);if(!m)return;
-  const tail=n.slice(n.indexOf(m[0])+m[0].length).trim();
-  clearTimeout(wakeTimer);
-  if(fin){hit(tail)}else{wakeTimer=setTimeout(()=>hit(tail),1600)}};
- r.onerror=e=>{const er=e&&e.error;if(er==='not-allowed'||er==='service-not-allowed'){on=false;store(false);toast('Microphone is blocked. Allow it in the browser to use "OntechBot".');paint()}};
- r.onend=()=>{wr=null;if(on&&!paused&&!busyCmd)setTimeout(startWake,350)};
- try{r.start();gotPerm=true}catch(e){wr=null}paint()}
-function hit(tail){const now=Date.now();if(now-lastHit<3000||busyCmd)return;lastHit=now;
- stopWake();const words=tail.split(' ').filter(Boolean);
- if(words.length>=2){busyCmd=true;paint();goAsk(tail);return}
- greet()}
-function goAsk(q){botPose('curious',2500);try{if(cur!=='chat')show('chat')}catch(e){}
- setTimeout(()=>{askAI(q);busyCmd=false;setTimeout(()=>{paint();startWake()},400)},300)}
-function greetText(){const n=S.name||'';return S.lang==='zu'?`Sawubona ${n}! Ngiyakulalela. Ungibuza ini?`:S.lang==='sn'?`Mhoro ${n}! Ndiri kukunzwa. Unoda kubvunza chii?`:`Hi ${n}! I'm listening. What would you like to ask me?`}
-function greet(){busyCmd=true;paint();botPose('present',2600);let started=false;
- const go=()=>{if(started)return;started=true;listenCmd()};
- say(greetText(),{interrupt:true,done:go});setTimeout(go,9000)}
+ const r=new SR();r.continuous=true;r.interimResults=true;r.maxAlternatives=4;r.lang='en-US';
+ r.onresult=e=>{if(paused||busyCmd)return;
+  let best=null,fin=false;
+  for(let i=e.resultIndex;i<e.results.length;i++){const res=e.results[i];if(res.isFinal)fin=true;
+   for(let a=0;a<res.length;a++){const n=norm(res[a].transcript),m=n.match(WAKE);if(m){const tail=n.slice(n.indexOf(m[0])+m[0].length).trim();if(!best||tail.length>best.length)best=tail}}}
+  if(best===null)return;pendTail=best;clearTimeout(hitTimer);
+  if(fin)hit(pendTail);else hitTimer=setTimeout(()=>hit(pendTail),650)};
+ r.onerror=e=>{const er=e&&e.error;if(er==='not-allowed'||er==='service-not-allowed'){on=false;store(false);wr=null;toast('Microphone is blocked. Allow it in the browser address bar, then tap the mic button.');paint()}};
+ r.onend=()=>{if(wr===r)wr=null;paint();if(on&&!paused&&!busyCmd)setTimeout(startWake,150)};
+ wr=r;lastStart=Date.now();try{r.start()}catch(e){wr=null}paint()}
+function hit(tail){const now=Date.now();if(now-lastHit<2500||busyCmd)return;lastHit=now;clearTimeout(hitTimer);
+ stopWake();busyCmd=true;paint();beep(880);
+ const q=(tail||'').replace(/^(please|can you|could you)\s+/,'').trim();
+ if(q.split(' ').filter(Boolean).length>=2){goAsk(q)}else greet()}
+function toChat(){try{if(cur!=='chat')show('chat')}catch(e){}}
+function goAsk(q){botPose('curious',2500);toChat();setTimeout(()=>{askAI(q);busyCmd=false;paint();setTimeout(startWake,300)},150)}
+function greetText(){const n=S.name?' '+S.name:'';return S.lang==='zu'?`Yebo${n}? Ngiyalalela.`:S.lang==='sn'?`Hongu${n}? Ndiri kukunzwa.`:`Yes${n}? I'm listening.`}
+function greet(){toChat();botPose('present',2200);let done=false;const go=()=>{if(done)return;done=true;listenCmd()};
+ say(greetText(),{interrupt:true,done:go});setTimeout(go,4500)}
 function listenCmd(){if(!SR){busyCmd=false;return}
- const r=new SR();r.lang={en:'en-ZA',zu:'zu-ZA',sn:'en-ZA'}[S.lang]||'en-ZA';r.interimResults=false;r.continuous=false;let got=false;
- const mic=document.getElementById('mic');mic&&mic.classList.add('on');botPose('curious',9000);
- r.onresult=e=>{got=true;const q=e.results[0][0].transcript;mic&&mic.classList.remove('on');try{if(cur!=='chat')show('chat')}catch(_){}askAI(q)};
+ const r=new SR();r.lang={en:'en-ZA',zu:'zu-ZA',sn:'en-ZA'}[S.lang]||'en-ZA';r.interimResults=true;r.continuous=false;let got=false,sent=false;
+ const mic=document.getElementById('mic');mic&&mic.classList.add('on');botPose('curious',10000);
+ const send=t=>{if(sent||!t)return;sent=true;got=true;mic&&mic.classList.remove('on');askAI(t)};
+ r.onresult=e=>{let t='',fin=false;for(let i=0;i<e.results.length;i++){t+=e.results[i][0].transcript;if(e.results[i].isFinal)fin=true}if(fin)send(t.trim())};
  r.onerror=()=>{};
- r.onend=()=>{mic&&mic.classList.remove('on');busyCmd=false;if(!got)botPose('shy',1800);paint();setTimeout(startWake,600)};
+ r.onend=()=>{mic&&mic.classList.remove('on');busyCmd=false;if(!got)botPose('shy',1800);paint();setTimeout(startWake,250)};
  try{r.start()}catch(e){busyCmd=false;paint();startWake()}
- setTimeout(()=>{try{if(!got)r.stop()}catch(e){}},9000)}
-/* pause listening while the bot itself is speaking, so it never wakes itself */
+ setTimeout(()=>{try{if(!got)r.stop()}catch(e){}},10000)}
+/* pause while the bot is talking so it never wakes itself */
 const oldTalk=window.setTalk;
-window.setTalk=function(v){oldTalk(v);if(!on)return;if(v){paused=true;stopWake();paint()}else{setTimeout(()=>{paused=false;if(!busyCmd)startWake();paint()},700)}};
+window.setTalk=function(v){oldTalk(v);if(!on)return;if(v){paused=true;stopWake();paint()}else{setTimeout(()=>{paused=false;if(!busyCmd)startWake();paint()},350)}};
+/* watchdog: if the recogniser ever dies or a pause gets stuck, bring it back */
+setInterval(()=>{if(!on||!SR||document.hidden)return;
+ if(paused&&!A.talking&&Date.now()-lastStart>1500){paused=false}
+ if(busyCmd&&Date.now()-lastHit>20000){busyCmd=false}
+ if(wr&&!paused&&!busyCmd&&Date.now()-lastStart>45000){stopWake()}
+ if(!wr&&!paused&&!busyCmd)startWake();paint()},2000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&on&&!wr&&!busyCmd)startWake()});
+function turnOn(){if(!SR||on&&wr)return;on=true;store(true);paused=false;startWake();paint()}
 function toggle(){if(!SR){toast('Voice listening is not supported in this browser. Use Chrome or Edge.');return}
- on=!on;store(on);paused=false;if(on){toast('Listening. Say "OntechBot" any time.');startWake()}else{stopWake()}paint()}
+ if(on){on=false;store(false);stopWake();toast('Listening is off.')}else{turnOn();toast('Listening. Say "OntechBot" or "Buddy" any time.')}paint()}
 function init(){const hdr=document.querySelector('.top');if(!hdr||document.getElementById('wbtn'))return;
- const b=document.createElement('button');b.className='icon-btn wake';b.id='wbtn';b.setAttribute('aria-label','Hands-free listening for OntechBot');b.innerHTML=I('mic',18)+'<i class="wd"></i>';
- const vb=document.getElementById('vbtn');hdr.insertBefore(b,vb);b.onclick=toggle;
- if(!SR){b.style.display='none';return}
- /* browsers only allow the microphone after a tap: start on the first tap anywhere unless the student turned it off */
- const first=()=>{document.removeEventListener('pointerdown',first,true);if(stored()==='0')return;on=true;store(true);startWake();paint();setTimeout(()=>toast('Say "OntechBot" any time. I am listening.'),500)};
- document.addEventListener('pointerdown',first,true);paint()}
+ const b=document.createElement('button');b.className='icon-btn wake';b.id='wbtn';b.setAttribute('aria-label','Hands-free listening');b.innerHTML=I('mic',18)+'<i class="wd"></i>';
+ hdr.insertBefore(b,document.getElementById('vbtn'));b.onclick=toggle;
+ const h=document.createElement('button');h.id='whint';h.className='whint';h.innerHTML=I('mic',16)+' Tap here, then say &ldquo;OntechBot&rdquo; or &ldquo;Buddy&rdquo;';h.onclick=()=>{turnOn()};document.body.appendChild(h);
+ if(!SR){b.style.display='none';h.style.display='none';return}
+ if(stored()==='0'){h.style.display='none'}
+ /* try straight away (works when the mic was already allowed), and on the first tap or key press */
+ const arm=()=>{if(stored()==='0')return;turnOn()};
+ try{navigator.permissions&&navigator.permissions.query({name:'microphone'}).then(p=>{if(p.state==='granted')arm()}).catch(()=>{})}catch(e){}
+ const first=()=>{['pointerdown','keydown','touchstart'].forEach(ev=>document.removeEventListener(ev,first,true));arm()};
+ ['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,first,true));paint()}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 window.ontechWake={hit,toggle,get on(){return on}};
 })();
