@@ -7,10 +7,12 @@ Installing needs a secure web address (https). You already use Cloudflare, so:
 3. Drag in the whole contents of this folder (index.html, sw.js, manifest.webmanifest, _headers and the icons folder). Click Deploy.
 4. Cloudflare gives you an address like https://ontechbot-app.pages.dev . That is your app.
 
+IMPORTANT: the Install button only works from the https address that Cloudflare gives you. It does NOT work if you open index.html from your computer, or from the Claude preview.
+
 STEP 2 - INSTALL IT
 Android (Chrome): open the address > tap the "Install" button at the top of the app (or menu > Install app).
 iPhone / iPad (Safari only): open the address > Share button > Add to Home Screen > Add. (The Install button in the app shows these steps.)
-Windows / Mac / Linux (Chrome or Edge): open the address > click the "Install" button in the app, or the install icon at the right end of the address bar.
+Windows / Mac / Linux: open your pages.dev address in Chrome or Edge, wait a few seconds, then click the "Install" button in the app. If nothing happens: Chrome - three dots > Cast, save and share > Install page as app. Edge - three dots > Apps > Install this site as an app. Then pin it from the Start menu or taskbar if you want.
 After that it opens in its own window with its own icon, and works offline (past papers, quizzes, exams). The AI answers need internet.
 
 UPDATING LATER
