@@ -379,6 +379,8 @@ body.talking .bot3d:not(.pz) .armR .fore{animation:b3exL 3.4s ease-in-out 1.7s i
 .icon-btn.wake.busy .wd{background:#f59e0b;animation:wkp .6s infinite}
 @keyframes wkp{50%{box-shadow:0 0 0 6px rgba(34,197,94,0)}0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}}
 .whint{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;border:1px solid var(--line);background:#fff;color:#4f46e5;font:700 13px 'Inter',sans-serif;box-shadow:var(--sh);cursor:pointer;white-space:nowrap}
+.cpill{bottom:96px;color:#fff;background:linear-gradient(135deg,#7c3aed,#06b6d4);border:0}
+.cpill .wd{width:10px;height:10px;border-radius:50%;background:#fff;animation:wkp 1.2s infinite;display:inline-block}
 
 </style></head><body>
 <div id="app">
@@ -1128,7 +1130,7 @@ function poseFor(ans,q){const a=(ans||'').slice(0,400).toLowerCase(),u=(q||'').t
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 /* matches OntechBot and the usual mis-hearings, plus buddy */
 const WAKE=/\b(?:(?:hey|hi|hello|ok|okay)\s+)?(?:buddy|buddie|bodie|budy|(?:on|un|own|an|in|and)\s?(?:tech|tek|tec|take|tack|teck)\s?(?:bot|but|boat|bought|board|bots|bod)?)\b/i;
-let wr=null,on=false,paused=false,busyCmd=false,lastHit=0,hitTimer=0,pendTail='',lastStart=0,AC=null;
+let cr=null,convo=false,queue=[],wr=null,on=false,paused=false,busyCmd=false,lastHit=0,hitTimer=0,pendTail='',lastStart=0,AC=null;
 const KEY2='ontech_wake';
 const stored=()=>{try{return localStorage.getItem(KEY2)}catch(e){return null}};
 const store=v=>{try{localStorage.setItem(KEY2,v?'1':'0')}catch(e){}};
@@ -1151,27 +1153,39 @@ function startWake(){if(!SR||!on||paused||busyCmd||wr)return;
  wr=r;lastStart=Date.now();try{r.start()}catch(e){wr=null}paint()}
 function hit(tail){const now=Date.now();if(now-lastHit<2500||busyCmd)return;lastHit=now;clearTimeout(hitTimer);
  stopWake();busyCmd=true;paint();beep(880);
- const q=(tail||'').replace(/^(please|can you|could you)\s+/,'').trim();
- if(q.split(' ').filter(Boolean).length>=2){goAsk(q)}else greet()}
+ const q=cleanQ(tail||'');
+ if(q.split(' ').filter(Boolean).length>=2){startConvo(q)}else greet()}
+function cleanQ(t){return(t||'').replace(/^(?:(?:hey|hi|hello|ok|okay)\s+)?(?:buddy|ontech\s?bot)\s*/,'').replace(/^(please|can you|could you)\s+/,'').trim()}
 function toChat(){try{if(cur!=='chat')show('chat')}catch(e){}}
-function goAsk(q){botPose('curious',2500);toChat();setTimeout(()=>{askAI(q);busyCmd=false;paint();setTimeout(startWake,300)},150)}
-function greetText(){const n=S.name?' '+S.name:'';return S.lang==='zu'?`Yebo${n}? Ngiyalalela.`:S.lang==='sn'?`Hongu${n}? Ndiri kukunzwa.`:`Yes${n}? I'm listening.`}
-function greet(){toChat();botPose('present',2200);let done=false;const go=()=>{if(done)return;done=true;listenCmd()};
- say(greetText(),{interrupt:true,done:go});setTimeout(go,4500)}
-function listenCmd(){if(!SR){busyCmd=false;return}
- const r=new SR();r.lang={en:'en-ZA',zu:'zu-ZA',sn:'en-ZA'}[S.lang]||'en-ZA';r.interimResults=true;r.continuous=false;let got=false,sent=false;
- const mic=document.getElementById('mic');mic&&mic.classList.add('on');botPose('curious',10000);
- const send=t=>{if(sent||!t)return;sent=true;got=true;mic&&mic.classList.remove('on');askAI(t)};
- r.onresult=e=>{let t='',fin=false;for(let i=0;i<e.results.length;i++){t+=e.results[i][0].transcript;if(e.results[i].isFinal)fin=true}if(fin)send(t.trim())};
- r.onerror=()=>{};
- r.onend=()=>{mic&&mic.classList.remove('on');busyCmd=false;if(!got)botPose('shy',1800);paint();setTimeout(startWake,250)};
- try{r.start()}catch(e){busyCmd=false;paint();startWake()}
- setTimeout(()=>{try{if(!got)r.stop()}catch(e){}},10000)}
+function greetText(){const n=S.name?' '+S.name:'';return S.lang==='zu'?`Yebo${n}? Ngiyalalela. Buza noma yini.`:S.lang==='sn'?`Hongu${n}? Ndiri kukunzwa. Bvunza chero chii.`:`Yes${n}? I'm listening. Ask me as many questions as you like.`}
+function greet(){toChat();botPose('present',2200);let done=false;const go=()=>{if(done)return;done=true;startConvo('')};
+ say(greetText(),{interrupt:true,done:go});setTimeout(go,5000)}
+/* conversation mode: the microphone stays open and every question is answered, until the student stops it */
+const STOP=/\b(stop listening|stop the mic|turn off the mic|goodbye|good bye|bye bye|that'?s all|that is all|end conversation|stop)\b/i;
+function showPill(v){let el=document.getElementById('cpill');if(!el){el=document.createElement('button');el.id='cpill';el.className='whint cpill';el.onclick=()=>endConvo(true);document.body.appendChild(el)}
+ el.innerHTML='<i class="wd"></i> Listening… ask me anything. Say &ldquo;stop&rdquo; or tap here to end';el.style.display=v?'flex':'none'}
+function startConvo(q){convo=true;busyCmd=true;paused=false;toChat();showPill(true);paint();const mic=document.getElementById('mic');mic&&mic.classList.add('on');botPose('curious',2500);
+ if(q)enqueue(q);startConvoRec()}
+function enqueue(q){queue.push(q);pump2()}
+function pump2(){if(!queue.length)return;if(typeof aiBusy!=='undefined'&&aiBusy||A.talking){setTimeout(pump2,400);return}askAI(queue.shift());if(queue.length)setTimeout(pump2,500)}
+function startConvoRec(){if(!convo||cr||paused||!SR)return;
+ const r=new SR();cr=r;r.continuous=true;r.interimResults=false;r.maxAlternatives=1;r.lang={en:'en-ZA',zu:'zu-ZA',sn:'en-ZA'}[S.lang]||'en-ZA';
+ r.onresult=e=>{if(paused||!convo)return;for(let i=e.resultIndex;i<e.results.length;i++){if(!e.results[i].isFinal)continue;const t=norm(e.results[i][0].transcript);if(!t)continue;
+   if(STOP.test(t)&&t.split(' ').length<=6){endConvo(false,true);return}
+   const q=cleanQ(t);if(q.split(' ').filter(Boolean).length>=1)enqueue(q)}};
+ r.onerror=e=>{const er=e&&e.error;if(er==='not-allowed'||er==='service-not-allowed'){toast('Microphone is blocked. Allow it in the browser address bar.');endConvo(true)}};
+ r.onend=()=>{if(cr===r)cr=null;if(convo&&!paused)setTimeout(startConvoRec,150)};
+ try{r.start()}catch(e){cr=null}}
+function stopConvoRec(){const r=cr;cr=null;if(!r)return;r.onend=null;r.onresult=null;r.onerror=null;try{r.abort()}catch(e){}}
+function endConvo(silent,speak){if(!convo)return;convo=false;queue=[];stopConvoRec();busyCmd=false;showPill(false);const mic=document.getElementById('mic');mic&&mic.classList.remove('on');beep(520);
+ if(speak)say(S.lang==='zu'?'Kulungile. Ngizophumula. Ngithi Buddy umaungidinga.':S.lang==='sn'?'Zvakanaka. Ndinoti Buddy kana wandidaidza.':'Okay, I will stop listening. Say Buddy when you need me again.',{interrupt:false});
+ paint();setTimeout(startWake,500)}
 /* pause while the bot is talking so it never wakes itself */
 const oldTalk=window.setTalk;
-window.setTalk=function(v){oldTalk(v);if(!on)return;if(v){paused=true;stopWake();paint()}else{setTimeout(()=>{paused=false;if(!busyCmd)startWake();paint()},350)}};
+window.setTalk=function(v){oldTalk(v);if(convo){if(v){paused=true;stopConvoRec()}else{setTimeout(()=>{paused=false;startConvoRec()},350)}return}if(!on)return;if(v){paused=true;stopWake();paint()}else{setTimeout(()=>{paused=false;if(!busyCmd)startWake();paint()},350)}};
 /* watchdog: if the recogniser ever dies or a pause gets stuck, bring it back */
-setInterval(()=>{if(!on||!SR||document.hidden)return;
+setInterval(()=>{if(convo&&SR){if(paused&&!A.talking&&Date.now()-lastStart>1500)paused=false;if(!cr&&!paused)startConvoRec();return}
+ if(!on||!SR||document.hidden)return;
  if(paused&&!A.talking&&Date.now()-lastStart>1500){paused=false}
  if(busyCmd&&Date.now()-lastHit>20000){busyCmd=false}
  if(wr&&!paused&&!busyCmd&&Date.now()-lastStart>45000){stopWake()}
@@ -1180,6 +1194,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&on&&!wr&&
 function turnOn(){if(!SR||on&&wr)return;on=true;store(true);paused=false;startWake();paint()}
 function toggle(){if(!SR){toast('Voice listening is not supported in this browser. Use Chrome or Edge.');return}
  if(on){on=false;store(false);stopWake();toast('Listening is off.')}else{turnOn();toast('Listening. Say "OntechBot" or "Buddy" any time.')}paint()}
+document.addEventListener('click',e=>{if(convo&&e.target.closest&&e.target.closest('#mic')){e.stopImmediatePropagation();e.preventDefault();endConvo(true)}},true);
 function init(){const hdr=document.querySelector('.top');if(!hdr||document.getElementById('wbtn'))return;
  const b=document.createElement('button');b.className='icon-btn wake';b.id='wbtn';b.setAttribute('aria-label','Hands-free listening');b.innerHTML=I('mic',18)+'<i class="wd"></i>';
  hdr.insertBefore(b,document.getElementById('vbtn'));b.onclick=toggle;
