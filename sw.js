@@ -1,5 +1,5 @@
-/* OntechBot service worker - v202610102255 */
-const CACHE='ontechbot-v202610102255';
+/* OntechBot service worker - v202610110714 */
+const CACHE='ontechbot-v202610110714';
 const FILES=['./','index.html','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png','icons/apple-touch-icon.png','icons/favicon-32.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)));});
 self.addEventListener('message',e=>{if(e.data==='skip')self.skipWaiting()});
