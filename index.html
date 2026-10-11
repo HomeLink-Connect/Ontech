@@ -502,6 +502,7 @@ body.ttplay .whint,body.ttplay .cpill{display:none!important}
 .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.scard{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;color:#fff;border-radius:24px;padding:16px;min-height:200px;overflow:hidden;box-shadow:0 14px 34px rgba(30,40,140,.28)}.scard b{font-size:19px;margin-top:6px}.scard small{opacity:.88;font-size:12.5px;max-width:15ch}.scard .ttb{margin-top:auto;padding:8px 14px;font-size:13px;position:relative;z-index:1}.scard .sart{position:absolute;right:-6px;bottom:-4px;width:46%;height:auto;background:none;border:0;box-shadow:none;border-radius:0;overflow:visible}.scard .ttk{position:relative;z-index:1}
 @media(min-width:900px){.sgrid{grid-template-columns:repeat(4,1fr)}}
 .ghearts{color:#e11d48}
+.replay{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:6px 12px;border-radius:99px;background:#eef2ff;color:var(--brand);font-weight:700;font-size:12.5px;border:1px solid #c7d2fe}
 
 </style></head><body>
 <div id="app">
@@ -1136,15 +1137,19 @@ async function aiReply(onText){const sys=sysPrompt();const hist=CH.slice(-12);
  if(AI_ENDPOINT){const res=await fetch(AI_ENDPOINT,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({system:sys,messages:hist})});if(!res.ok){let bd='';try{bd=(await res.text()).slice(0,200)}catch(e){}throw new Error('server said '+res.status+' '+bd)}const j=await res.json();if(!j.text)throw new Error('empty');return j.text}
  return null}
 function addBotEl(){const m=document.createElement('div');m.className='m bot';$('#msgs').appendChild(m);$('#msgs').scrollTop=1e9;return m}
-function speakable(t){t=t.replace(/[*`#]/g,'').replace(/\s+/g,' ').trim();if(t.length<=450)return t;const cut=t.slice(0,450),i=Math.max(cut.lastIndexOf('. '),cut.lastIndexOf('? '));return i>200?cut.slice(0,i+1):cut}
+function speakable(t){t=String(t||'').replace(/```[\s\S]*?```/g,' ').replace(/[*`#_>]/g,'');
+ t=t.replace(/\n[ \t]*[-•]\s+/g,'. ').replace(/\n[ \t]*(\d+)[.)]\s+/g,'. Number $1. ').replace(/\n+/g,'. ');
+ t=t.replace(/([a-z0-9])\^2\b/gi,'$1 squared').replace(/([a-z0-9])\^3\b/gi,'$1 cubed').replace(/\^\s*(-?\w+)/g,' to the power $1').replace(/√\s*\(?(\w+)\)?/g,' square root of $1 ').replace(/sqrt\(([^)]*)\)/gi,' square root of $1 ')
+  .replace(/×/g,' times ').replace(/(\d)[ \t]*x[ \t]*(\d)/g,'$1 times $2').replace(/÷/g,' divided by ').replace(/(\d)[ \t]*\/[ \t]*(\d)/g,'$1 over $2').replace(/[ \t]=[ \t]/g,' equals ').replace(/[ \t]\+[ \t]/g,' plus ').replace(/[ \t][−–-][ \t]/g,' minus ').replace(/(\d)[−–](\d)/g,'$1 to $2').replace(/%/g,' percent').replace(/°C/g,' degrees Celsius').replace(/→/g,' gives ');
+ return t.replace(/([.!?:;,])\s*\.\s*/g,'$1 ').replace(/\s+/g,' ').trim()}
 const CREATOR="I was created by **Arnold Nedahwa**, a passionate and hardworking software engineer, and the CEO & Founder of **ZimPro-Linkup**. Arnold builds real-life solutions that people actually use. Besides ZimPro-Linkup, he developed the Fleet truck tracking system, WiseBot AI for Wise Parrot Junior School, the Home-Link housing app, the Jarvis AI Assistant and several school management systems. I am proud to be one of his creations, and he shows what a determined Zimbabwean innovator can achieve!";
 const isCreatorQ=q=>/\b(who|whom)\b.{0,30}\b(creat|made|make|built|build|develop|design|program|invent|own|found|behind|train)\w*\b.{0,25}\b(you|u|this|ontechbot|buddy)\b|\byour\s+(creator|developer|maker|founder|programmer|owner|inventor|author|boss)\b|\bwho\s+(is|was)\s+(arnold|nedahwa)|\barnold\s+nedahwa\b|\bwho\s+(are\s+you\s+made\s+by|owns\s+you)\b/i.test(q||'');
 async function askAI(txt){txt=(txt||'').trim();if(!txt||aiBusy)return;addMsg(txt,'me');$('#ci').value='';
  CH.push({role:'user',content:txt});botPose('think',90000);const el=addBotEl();el.innerHTML='<span class="typing"><b></b><b></b><b></b></span>';aiBusy=true;$('#cs').disabled=true;
- let out=null,err=null;if(isCreatorQ(txt)){out=CREATOR;CH.pop();CH.push({role:'user',content:txt})}
+ let out=null,err=null;if(isCreatorQ(txt))out=CREATOR;
  try{if(!out)out=await aiReply(t=>{el.innerHTML=mdLite(t);$('#msgs').scrollTop=1e9})}catch(e){err=e}
  aiBusy=false;$('#cs').disabled=false;
- if(out){botPose(poseFor(out,txt),3400);el.innerHTML=mdLite(out);CH.push({role:'assistant',content:out});say(speakable(out),{interrupt:true});$('#msgs').scrollTop=1e9;return}
+ if(out){botPose(poseFor(out,txt),3400);el.innerHTML=mdLite(out)+`<button class="replay" aria-label="Read aloud again">${I('vol',15)} Read again</button>`;el.querySelector('.replay').onclick=()=>{botPose(poseFor(out,txt),3400);say(speakable(out),{interrupt:true})};CH.push({role:'assistant',content:out});say(speakable(out),{interrupt:true});$('#msgs').scrollTop=1e9;return}
  CH.pop();let a;
  if(err){botPose('shy',2800);a=(err&&err.code==='rate_limited')?'I am getting many questions right now. Please wait a moment and ask again.':'Sorry, I could not reach my thinking service just now. Check your internet connection and try again.\n\n(Technical detail for your teacher: '+(err&&err.message||err)+')'}
  else{a=answerFor(txt);if(a===bot().nf)a=a+'\n\nTo answer any question, the AI tutor has to be switched on by your school. Ask your teacher to connect it.'}
@@ -1296,7 +1301,8 @@ function lipStart(text,rate){A.lip={tl:buildTimeline(text,rate),t0:performance.n
 function lipSync(charIndex){const L=A.lip;if(!L)return;const c=Math.max(0,Math.min(L.tl.length-1,charIndex|0));L.t0=performance.now()-L.tl[c].t;L.i=c>0?Math.max(0,c-3):0}
 function lipStop(){A.lip=null}
 /* split long text into sentence-sized chunks: avoids the browser cutting speech off */
-function chunks(txt){const out=[];String(txt).replace(/\s+/g,' ').trim().split(/(?<=[.!?;:])\s+/).forEach(s=>{while(s.length>170){let k=s.lastIndexOf(',',170);if(k<60)k=s.lastIndexOf(' ',170);if(k<60)k=170;out.push(s.slice(0,k+1).trim());s=s.slice(k+1).trim()}if(s)out.push(s)});return out}
+function chunks(txt){const raw=[];String(txt).replace(/\s+/g,' ').trim().split(/(?<=[.!?;:])\s+/).forEach(s=>{while(s.length>170){let k=s.lastIndexOf(',',170);if(k<60)k=s.lastIndexOf(' ',170);if(k<60)k=170;raw.push(s.slice(0,k+1).trim());s=s.slice(k+1).trim()}if(s)raw.push(s)});
+ const out=[];let cur='';for(const r of raw){if(cur&&(cur+' '+r).length>150){out.push(cur);cur=r}else cur=cur?cur+' '+r:r}if(cur)out.push(cur);return out}
 let unlocked=false,pending=null,cur_u=null,gen=0;
 function unlock(){if(unlocked||!synth)return;try{const u=new SpeechSynthesisUtterance(' ');u.volume=0;synth.speak(u);unlocked=true}catch(e){}
  if(pending&&Date.now()-pending.at<25000){const p=pending;pending=null;audioBlocked=false;setTimeout(()=>say(p.txt,{lang:p.lang,interrupt:true,done:p.done}),150)}}
@@ -1326,7 +1332,7 @@ window.pump=function(){if(busy||!queue.length)return;busy=true;const it=queue.sh
   /* if the engine never starts, retry once, then tell the student how to switch sound on */
   const sw=setTimeout(()=>{if(started||done||my!==gen)return;try{synth.cancel();synth.resume()}catch(_){}if(++tries>1&&++failed>1){blocked();return}setTimeout(()=>{if(started||done||my!==gen)return;try{synth.speak(u)}catch(_){blocked()}},120)},2200);
   /* if it starts but never ends, move on */
-  const est=buildTimeline(text,rate).slice(-1)[0].t+4000;const wd=setTimeout(()=>{if(!done&&my===gen){try{synth.cancel()}catch(_){}proceed()}},est);
+  const est=buildTimeline(text,rate).slice(-1)[0].t*1.5+5000;const wd=setTimeout(()=>{if(!done&&my===gen){try{synth.cancel()}catch(_){}proceed()}},est);
   try{synth.cancel()}catch(_){}
   setTimeout(()=>{if(my!==gen||done)return;try{synth.resume();synth.speak(u)}catch(_){console.log("speakerr",_);blocked()}},idx===1?90:30)};
  next()};
